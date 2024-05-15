@@ -15,10 +15,12 @@ import (
 	"time"
 )
 
+var valid_first_byte = []byte{128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185}
+
 type PublicKey = blst.P1Affine
 
 func hasPrefix(key *PublicKey, prefix []byte) bool {
-	keyData := key.Serialize()
+	keyData := key.Compress()
 	return bytes.Compare(keyData[:len(prefix)], prefix) == 0
 }
 
@@ -38,7 +40,7 @@ func searchForSeed(count *uint64, maxTries int, prefix []byte, wg *sync.WaitGrou
 
 		if hasPrefix(pk, prefix) {
 			fmt.Println("secret key", hex.EncodeToString(sk.Serialize()))
-			fmt.Println("public key", hex.EncodeToString(pk.Serialize()))
+			fmt.Println("public key", hex.EncodeToString(pk.Compress()))
 			break
 		}
 
@@ -74,15 +76,27 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if prefix[0] > 26 {
-		panic("first byte should be in 0-26 range")
+
+	validFirstByte := false
+	for _, val := range valid_first_byte {
+		if prefix[0] == val {
+			validFirstByte = true
+			break
+		}
+	}
+	if !validFirstByte {
+		fmt.Println("first byte should be one of the following")
+		for _, val := range valid_first_byte {
+			fmt.Printf("%x\n", val)
+		}
+		return
 	}
 
 	var count *uint64 = new(uint64)
 	start := time.Now()
 
 	triesNeeded := new(big.Int).Exp(big.NewInt(256), big.NewInt(int64(len(prefix))), nil)
-	triesNeeded.Div(triesNeeded, big.NewInt(9)) // bias because first byte may be only 0-26
+	triesNeeded.Div(triesNeeded, big.NewInt(int64(255/len(valid_first_byte)))) // bias because first byte may have certain values
 	go func() {
 		for {
 			time.Sleep(time.Second * 5)
